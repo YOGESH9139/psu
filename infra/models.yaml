@@ -1,0 +1,105 @@
+models:
+  - id: qwen3-8b
+    name: "Qwen3 8B (Q4_K_M)"
+    ollama_model: "qwen3:8b"
+    endpoint: "http://ollama:11434"
+    capabilities:
+      - planning
+      - coding
+      - tool_calling
+      - summarization
+      - general_reasoning
+    preferred_tasks:
+      - coding
+      - spreadsheet-analysis
+      - general-reasoning
+    context_limit: 32768
+    # Context actually requested at load time. Measured on the 8 GB target card:
+    # Q4_K_M weights take ~4.6 GB and only ~5.5 GB is actually addressable under
+    # WSL2 GPU passthrough, so the KV cache has under 1 GB to live in. 4096 with
+    # a q8_0 cache (see OLLAMA_KV_CACHE_TYPE in docker-compose.yml) fits; 8192
+    # with an f16 cache does not — it needs 1152 MB and hard-fails the load.
+    num_ctx: 4096
+    gpu_tier: 8gb
+    # Stay resident for the duration of a run, but no longer. The router evicts
+    # the *other* model before loading this one, which is what actually keeps a
+    # single 8 GB card from OOMing. keep_alive: 0 would unload after every single
+    # request and add a ~30 s reload to each step of the agent loop.
+    keep_alive: "5m"
+    preload: false         # do not preload; load on the first route decision
+    health_check_path: "/api/tags"
+
+  - id: qwen25vl-7b
+    name: "Qwen2.5-VL 7B (Q4_K_M)"
+    ollama_model: "qwen2.5vl:7b"
+    endpoint: "http://ollama:11434"
+    capabilities:
+      - vision
+      - ocr_assist
+      - document_analysis
+      - image_description
+    preferred_tasks:
+      - multimodal-document
+    context_limit: 32768
+    # Context actually requested at load time. Measured on the 8 GB target card:
+    # Q4_K_M weights take ~4.6 GB and only ~5.5 GB is actually addressable under
+    # WSL2 GPU passthrough, so the KV cache has under 1 GB to live in. 4096 with
+    # a q8_0 cache (see OLLAMA_KV_CACHE_TYPE in docker-compose.yml) fits; 8192
+    # with an f16 cache does not — it needs 1152 MB and hard-fails the load.
+    num_ctx: 4096
+    gpu_tier: 8gb
+    keep_alive: "5m"
+    preload: false
+    health_check_path: "/api/tags"
+
+router_rules:
+  # Rules are evaluated in order; first match wins
+  - task_class: multimodal-document
+    model_id: qwen25vl-7b
+    signals:
+      mime_types: ["application/pdf", "image/png", "image/jpeg", "image/tiff"]
+      keywords: ["inspection", "report", "scan", "ocr", "drawing", "photograph",
+                 "corrosion", "equipment", "diagram", "finding"]
+    confidence_boost: 0.2
+
+  - task_class: coding
+    model_id: qwen3-8b
+    signals:
+      file_extensions: [".py", ".js", ".ts", ".sh", ".go", ".rs", ".cpp", ".java"]
+      keywords: ["write", "code", "function", "implement", "debug", "test",
+                 "script", "program", "algorithm", "fix the bug"]
+    confidence_boost: 0.2
+
+  - task_class: spreadsheet-analysis
+    model_id: qwen3-8b
+    signals:
+      mime_types: ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                   "application/vnd.ms-excel", "text/csv"]
+      file_extensions: [".xlsx", ".xls", ".csv"]
+      keywords: ["threshold", "readings", "column", "exceed", "average", "data",
+                 "analysis", "spreadsheet", "sheet", "row"]
+    confidence_boost: 0.15
+
+  - task_class: general-reasoning
+    model_id: qwen3-8b
+    signals: {}           # catch-all; always matches with base confidence
+    confidence_boost: 0.0
+
+# Retrieval stack as actually implemented in worker/rag/pipeline.py.
+embeddings:
+  model: "BAAI/bge-small-en-v1.5"
+  runtime: "fastembed (ONNX, CPU)"
+  # Baked into the worker image at build time; nothing is fetched at runtime.
+  local_path: "/opt/models/fastembed"
+  dimensions: 384
+
+retrieval:
+  strategy: "hybrid"
+  dense: "BAAI/bge-small-en-v1.5 via Qdrant cosine search"
+  lexical: "BM25 over the Postgres-resident chunk corpus"
+  fusion: "reciprocal rank fusion (k=60)"
+  top_k_before: 12
+  top_k_after: 5
+  # Roadmap: swap the RRF stage for a local cross-encoder. bge-reranker-v2-m3
+  # needs torch in the worker image, which is out of scope for the MVP.
+  reranker: null

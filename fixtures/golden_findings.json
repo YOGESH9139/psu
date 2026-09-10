@@ -1,0 +1,71 @@
+{
+  "_note": "Test oracle for the synthetic fixture pack. All values are invented.",
+  "inspection_report.pdf": {
+    "expected_ocr_terms": [
+      "ULTRASONIC",
+      "THICKNESS",
+      "elbow",
+      "9.5",
+      "6.8",
+      "2.7",
+      "G-06",
+      "coating",
+      "escalation"
+    ],
+    "min_ocr_words_per_page": 20,
+    "nominal_wall_thickness_mm": 9.5,
+    "minimum_measured_thickness_mm": 6.8,
+    "maximum_wall_loss_mm": 2.7,
+    "worst_grid_point": "G-06",
+    "expected_classification": "ESCALATE"
+  },
+  "corrosion_sop.pdf": {
+    "escalation_threshold_mm": 2.0,
+    "expected_citation_clauses": [
+      "3.4",
+      "4.1",
+      "4.2",
+      "4.4"
+    ],
+    "expected_citation_count_min": 2,
+    "clause_text_fragments": [
+      "Wall loss exceeding 2.0 mm",
+      "authorized integrity engineer",
+      "may not be waived"
+    ]
+  },
+  "readings_log.xlsx": {
+    "sheets": [
+      "Thickness Survey",
+      "Coating Condition",
+      "Survey Schedule"
+    ],
+    "threshold_column": "wall_loss_mm",
+    "threshold_value": 2.0,
+    "expected_rows_above_threshold": 3,
+    "expected_grid_points_above_threshold": [
+      "G-05",
+      "G-06",
+      "G-07"
+    ]
+  },
+  "coding_fixture.py": {
+    "bug": "off-by-one: `<=` should be `<` in grid_points_below_limit",
+    "expected_first_run": "fail",
+    "expected_after_one_repair": "pass",
+    "failing_test": "test_reading_exactly_at_limit_is_not_a_breach"
+  },
+  "approval_note.docx": {
+    "required_headings": [
+      "Purpose",
+      "Source Report Metadata",
+      "Extracted Findings",
+      "Applicable SOP Clauses",
+      "Recommended Action",
+      "Risk Notice",
+      "Approval"
+    ],
+    "min_citations": 2,
+    "must_not_self_approve": true
+  }
+}

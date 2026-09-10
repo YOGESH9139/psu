@@ -1,0 +1,39 @@
+{
+  "_note": "What a correct run must produce. All data is synthetic.",
+  "primary_question": "Which machines are running above 85 degrees C? Check them against our maintenance policy and draft a maintenance approval note.",
+  "expected_route": {
+    "task_class": "spreadsheet-analysis",
+    "model_id": "qwen3-8b"
+  },
+  "temperature_limit_c": 85.0,
+  "expected_match_count": 3,
+  "expected_machines": [
+    "M-04",
+    "M-07",
+    "M-10"
+  ],
+  "expected_machine_names": {
+    "M-04": "Hydraulic Press 1",
+    "M-07": "Air Compressor",
+    "M-10": "Grinding Unit"
+  },
+  "expected_temperatures": {
+    "M-04": 91.6,
+    "M-07": 88.3,
+    "M-10": 94.2
+  },
+  "high_priority_both_limits": [
+    "M-04",
+    "M-07",
+    "M-10"
+  ],
+  "expected_policy_clauses": [
+    "2.2",
+    "2.3",
+    "4.1",
+    "4.2"
+  ],
+  "expected_citation_count_min": 2,
+  "must_pause_for_human_approval": true,
+  "deliverable": "maintenance_note.docx"
+}

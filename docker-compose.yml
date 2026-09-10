@@ -1,0 +1,232 @@
+networks:
+  internal:
+    driver: bridge
+    internal: true
+  edge:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+  qdrant_data:
+  ollama_models:
+  uploads:
+  knowledge:
+  run_workspaces:
+  artifacts:
+  sandbox_queue:
+
+services:
+  # ─── Data layer ──────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    mem_limit: 512m
+    environment:
+      POSTGRES_DB: sovereign
+      POSTGRES_USER: sovereign
+      POSTGRES_PASSWORD: sovereign_pass
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sovereign -d sovereign"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    mem_limit: 256m
+    command: redis-server --save 60 1
+    volumes:
+      - redis_data:/data
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  qdrant:
+    image: qdrant/qdrant:v1.12.4
+    mem_limit: 768m
+    volumes:
+      - qdrant_data:/qdrant/storage
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'cat < /dev/null > /dev/tcp/127.0.0.1/6333' || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  # ─── Local model server (GPU via Docker Desktop WSL2 passthrough) ─────────────
+  ollama:
+    image: ollama/ollama:latest
+    # Model weights are mirrored in host RAM alongside VRAM, so this is the
+    # single largest consumer in the stack. 7 GB holds one 8B Q4 model with
+    # headroom; without a cap it grows until Windows starts swapping.
+    mem_limit: 7g
+    volumes:
+      - ollama_models:/root/.ollama
+    networks:
+      - internal
+      # `edge` is ONLY needed to pull model weights during setup.
+      # For the judged/air-gapped demo run:
+      #   docker compose -f docker-compose.yml -f docker-compose.airgap.yml up -d
+      # which removes this network entirely.
+      - edge
+    # On a machine with no NVIDIA runtime, drop this block (or use
+    # docker-compose.cpu.yml) — Ollama then runs on CPU, slower but working.
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+    environment:
+      # Router-driven eviction handles VRAM, so the server-wide default can be a
+      # normal short TTL rather than 0 (which would reload 5 GB on every call).
+      - OLLAMA_KEEP_ALIVE=5m
+      # Quantized KV cache — roughly halves cache VRAM, which is the difference
+      # between loading and OOMing an 8B Q4 model on an 8 GB card.
+      - OLLAMA_FLASH_ATTENTION=1
+      - OLLAMA_KV_CACHE_TYPE=q8_0
+      # Never try to hold two models at once on this card.
+      - OLLAMA_MAX_LOADED_MODELS=1
+
+  # ─── Sandbox (truly network-isolated, communicates via shared volume) ─────────
+  sandbox:
+    build:
+      context: ./sandbox
+      dockerfile: Dockerfile
+    network_mode: none          # zero network access — no interface but loopback
+    mem_limit: 512m
+    cpus: 1.0
+    pids_limit: 64
+    read_only: true             # rootfs is immutable; only the mounts below are writable
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - sandbox_queue:/sandbox_queue
+      - type: tmpfs
+        target: /tmp
+      - type: tmpfs
+        target: /workspace
+        tmpfs:
+          size: 128m
+    restart: unless-stopped
+
+  # ─── Backend API ──────────────────────────────────────────────────────────────
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    mem_limit: 1g
+    ports:
+      - "127.0.0.1:8000:8000"   # localhost-only — sovereignty requirement
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://sovereign:sovereign_pass@postgres:5432/sovereign
+      - SYNC_DATABASE_URL=postgresql+psycopg://sovereign:sovereign_pass@postgres:5432/sovereign
+      - REDIS_URL=redis://redis:6379
+      - QDRANT_URL=http://qdrant:6333
+      - OLLAMA_URL=http://ollama:11434
+      - UPLOADS_DIR=/data/uploads
+      - ARTIFACTS_DIR=/data/artifacts
+      - WORKSPACES_DIR=/data/workspaces
+      - MODELS_YAML_PATH=/app/infra/models.yaml
+    volumes:
+      - uploads:/data/uploads
+      - artifacts:/data/artifacts
+      - run_workspaces:/data/workspaces
+    networks:
+      - internal
+      - edge
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    restart: unless-stopped
+
+  # ─── Worker (LangGraph agent runner) ─────────────────────────────────────────
+  worker:
+    build:
+      context: .
+      dockerfile: worker/Dockerfile
+    mem_limit: 3g
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://sovereign:sovereign_pass@postgres:5432/sovereign
+      - SYNC_DATABASE_URL=postgresql+psycopg://sovereign:sovereign_pass@postgres:5432/sovereign
+      - REDIS_URL=redis://redis:6379
+      - QDRANT_URL=http://qdrant:6333
+      - OLLAMA_URL=http://ollama:11434
+      - UPLOADS_DIR=/data/uploads
+      - KNOWLEDGE_DIR=/data/knowledge
+      - WORKSPACES_DIR=/data/workspaces
+      - ARTIFACTS_DIR=/data/artifacts
+      - SANDBOX_QUEUE_DIR=/sandbox_queue
+      - MODELS_YAML_PATH=/app/infra/models.yaml
+      # The embedding model is pre-staged INTO the worker image at build time,
+      # so nothing is fetched at runtime.
+      - FASTEMBED_CACHE_PATH=/opt/models/fastembed
+      - HF_HOME=/opt/models/hf
+      - TRANSFORMERS_OFFLINE=1
+      - HF_HUB_OFFLINE=1
+    volumes:
+      - uploads:/data/uploads
+      - knowledge:/data/knowledge
+      - run_workspaces:/data/workspaces
+      - artifacts:/data/artifacts
+      - sandbox_queue:/sandbox_queue
+    networks:
+      - internal
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ─── Frontend (served by Nginx, also internal-only) ──────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "127.0.0.1:3000:80"
+    networks:
+      - internal
+      - edge
+    depends_on:
+      - api
+    restart: unless-stopped

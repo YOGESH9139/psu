@@ -1,0 +1,22 @@
+# Air-gapped overlay — use this for the judged demo run.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.airgap.yml up -d
+#
+# It removes the `edge` network from the model server, so every container that
+# touches models, documents or generated code is left on the internal-only
+# network with no default route out. The API and frontend keep `edge` purely so
+# Docker can publish their ports to 127.0.0.1 for the operator's browser; they
+# make no outbound calls, and /api/sovereignty/status measures that claim from
+# inside each container rather than asserting it.
+#
+# Precondition: model weights are already pulled into the `ollama_models`
+# volume. Verify with:  docker compose exec ollama ollama list
+
+services:
+  ollama:
+    networks:
+      - internal
+
+  worker:
+    environment:
+      - SOVEREIGN_AIRGAP=1
