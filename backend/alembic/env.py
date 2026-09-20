@@ -12,6 +12,7 @@ from app.models.db_models import (  # noqa: F401
     KnowledgeChunk,
     Run,
     UploadedFile,
+    Workspace,
 )
 
 config = context.config

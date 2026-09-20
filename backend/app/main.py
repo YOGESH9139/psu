@@ -8,7 +8,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import files, knowledge, runs, sovereignty
+from app.api import files, knowledge, runs, sovereignty, workspaces
 from app.core.config import settings
 from app.services.model_registry import registry
 
@@ -50,6 +50,7 @@ app.include_router(files.router)
 app.include_router(runs.router)
 app.include_router(knowledge.router)
 app.include_router(sovereignty.router)
+app.include_router(workspaces.router)
 
 
 @app.get("/health")

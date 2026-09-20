@@ -12,6 +12,7 @@ from worker.rag.pipeline import rag_pipeline
 class SearchKnowledgeInput(BaseModel):
     query: str = Field(..., description="What to look for in the local SOP/manual corpus")
     top_k: int = Field(5, ge=1, le=10, description="How many excerpts to return")
+    workspace: str | None = Field(None, description="Workspace whose library to search")
 
 
 class ReadSourceExcerptInput(BaseModel):
@@ -19,10 +20,10 @@ class ReadSourceExcerptInput(BaseModel):
 
 
 @tool("search_knowledge", args_schema=SearchKnowledgeInput)
-def search_knowledge(query: str, top_k: int = 5) -> Dict[str, Any]:
+def search_knowledge(query: str, top_k: int = 5, workspace: str | None = None) -> Dict[str, Any]:
     """Hybrid (dense + BM25) search over locally ingested SOPs and manuals.
     Every hit carries its source file and page number for citation."""
-    hits: List[Dict[str, Any]] = rag_pipeline.search(query, top_k=top_k)
+    hits: List[Dict[str, Any]] = rag_pipeline.search(query, top_k=top_k, workspace=workspace)
     return {
         "status": "success",
         "query": query,

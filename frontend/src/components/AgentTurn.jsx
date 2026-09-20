@@ -214,10 +214,12 @@ export default function AgentTurn({ run, onPreview, onShowWork }) {
       <div className="agent-head">
         <span className="agent-avatar"><Sparkle /></span>
         <span>{headline}</span>
-        <button type="button" className="mini-btn" onClick={onShowWork}>
-          show the work
-          <ChevronRight style={{ width: 11, height: 11, verticalAlign: "-1px" }} />
-        </button>
+        {onShowWork && (
+          <button type="button" className="mini-btn" onClick={onShowWork}>
+            show the work
+            <ChevronRight style={{ width: 11, height: 11, verticalAlign: "-1px" }} />
+          </button>
+        )}
       </div>
 
       <div className="turn-body">

@@ -26,7 +26,7 @@ from sqlalchemy.orm import sessionmaker
 from app.core.config import settings
 from app.models.db_models import ApprovalRecord, Artifact, Run, UploadedFile
 from app.services.model_registry import registry
-from app.services.model_router import route as route_request
+from app.services.model_router import route as route_request, route_followup
 from worker.agent import planning
 from worker.agent.events import audit, bump_iteration_count, emit, hash_result, set_run_status
 from worker.agent.state import AgentState
@@ -177,11 +177,18 @@ def route_node(state: AgentState) -> Dict[str, Any]:
     _state_event(state, "ROUTE")
 
     files = state.get("input_files", [])
-    decision = route_request(
+    router_fn = route_followup if state.get("context") else route_request
+    decision = router_fn(
         state.get("goal", ""),
         [f["mime_type"] for f in files],
         [f["filename"] for f in files],
     ).to_dict()
+
+    override = state.get("model_override")
+    if override and registry.get_model(override):
+        signals = list(decision.get("matched_signals", [])) + ["manual: model chosen by user"]
+        decision.update(model_id=override, modelId=override, manual=True,
+                        matched_signals=signals, matchedSignals=signals)
 
     emit(run_id, "router_decision", decision)
 
@@ -416,7 +423,7 @@ def verify_node(state: AgentState) -> Dict[str, Any]:
                                       "citations": planning.collected_citations(state)})
         audit(run_id, "VERIFY_PASS", model_id=state.get("model_id"),
               sanitized_args={"kind": "general_answer"})
-        return updates
+        return {"answer_text": answer}
 
     if task_class == "coding":
         tests = planning.observations_for(state, "run_code_tests")
@@ -615,6 +622,7 @@ def deliver_node(state: AgentState) -> Dict[str, Any]:
 
     registered = _register_artifacts(run_id)
     emit(run_id, "artifacts", {"artifacts": registered})
+    _store_result(run_id, state)
 
     if decision == "reject":
         set_run_status(run_id, "rejected_final")
@@ -645,6 +653,27 @@ def deliver_node(state: AgentState) -> Dict[str, Any]:
         "iterations": state.get("iteration_count", 0),
     })
     return {}
+
+
+def _store_result(run_id: str, state: AgentState) -> None:
+    """Keep a compact record of this turn so a follow-up can build on it."""
+    rows: list = []
+    for obs in state.get("observations", []):
+        if obs.get("tool") == "analyze_spreadsheet":
+            rows = (obs.get("result") or {}).get("matched_rows") or []
+    result = {
+        "answer": state.get("answer_text"),
+        "findings": state.get("findings") or [],
+        "matched_rows": rows[:20],
+    }
+    try:
+        with SessionLocal() as session:
+            run = session.get(Run, run_id)
+            if run is not None:
+                run.result = result
+                session.commit()
+    except Exception as e:
+        logger.warning("[%s] could not store result: %s", run_id, e)
 
 
 def _register_artifacts(run_id: str) -> list[dict]:

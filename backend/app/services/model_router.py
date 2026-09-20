@@ -240,3 +240,15 @@ class ModelRouter:
 
 
 model_router = ModelRouter()
+
+
+_DELIVERABLE_RE = re.compile(r"(draft|note|report|memo|approval|document|docx|word)")
+
+
+def route_followup(goal, file_mimes=None, file_names=None):
+    """A follow-up like "now show it as a table" is a conversation turn, not a new
+    document job. Only look at the attached files when the operator explicitly
+    asks for a deliverable again."""
+    if _DELIVERABLE_RE.search((goal or "").lower()):
+        return route(goal, file_mimes, file_names)
+    return route(goal, [], [])

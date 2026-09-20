@@ -25,7 +25,8 @@ from app.models.db_models import (
     UploadedFile,
 )
 from app.services.artifact_preview import preview_artifact
-from app.services.model_router import route
+from app.services.model_registry import registry
+from app.services.model_router import route, route_followup
 
 router = APIRouter(prefix="/api/runs", tags=["runs"])
 
@@ -37,6 +38,9 @@ RUN_QUEUE = "run_jobs"
 class CreateRunRequest(BaseModel):
     goal: str
     file_ids: list[str] = []
+    workspace: str | None = None
+    parent_run_id: str | None = None
+    model: str | None = None   # None = Automatic: the router picks
 
 
 class RunResponse(BaseModel):
@@ -47,6 +51,8 @@ class RunResponse(BaseModel):
     model_id: str | None = None
     router_decision: dict | None = None
     error_message: str | None = None
+    workspace: str | None = None
+    parent_run_id: str | None = None
     created_at: str
 
 
@@ -77,8 +83,25 @@ def _to_response(run: Run) -> RunResponse:
         model_id=run.model_id,
         router_decision=run.router_decision,
         error_message=run.error_message,
+        workspace=run.workspace,
+        parent_run_id=run.parent_run_id,
         created_at=run.created_at.isoformat(),
     )
+
+
+def _context_from_parent(parent: Run) -> str:
+    """Compact text of what the earlier turn produced, for the follow-up to use."""
+    result = parent.result or {}
+    parts = [f"Earlier request: {parent.goal}"]
+    if result.get("answer"):
+        parts.append(f"Earlier answer: {result['answer']}")
+    for f in (result.get("findings") or [])[:6]:
+        parts.append(f"Earlier finding: {f.get('item')}: {f.get('detail')}")
+    rows = result.get("matched_rows") or []
+    if rows:
+        parts.append("Earlier matching rows: " + "; ".join(
+            ", ".join(f"{k}={v}" for k, v in r.items()) for r in rows[:12]))
+    return chr(10).join(parts)[:3500]
 
 
 # ─── Routes ──────────────────────────────────────────────────────────────────
@@ -90,26 +113,56 @@ async def create_run(
     if not body.goal.strip():
         raise HTTPException(status_code=422, detail="Goal must not be empty")
 
+    # A follow-up continues an earlier run: same workspace, same files unless new
+    # ones are attached, and the earlier result handed over as context.
+    parent: Run | None = None
+    context = ""
+    file_ids = list(body.file_ids)
+    workspace = body.workspace
+    if body.parent_run_id:
+        parent = await db.get(Run, body.parent_run_id)
+        if parent is None:
+            raise HTTPException(status_code=404, detail="Unknown parent run")
+        workspace = workspace or parent.workspace
+        if not file_ids:
+            file_ids = list(parent.file_ids or [])
+        context = _context_from_parent(parent)
+
     # Collect MIME types / names from uploaded files so the router can see them.
     files: list[UploadedFile] = []
-    for fid in body.file_ids:
+    for fid in file_ids:
         f = await db.get(UploadedFile, fid)
         if not f:
             raise HTTPException(status_code=404, detail=f"Unknown file_id: {fid}")
         files.append(f)
 
-    decision = route(
+    router_fn = route_followup if parent is not None else route
+    decision = router_fn(
         body.goal,
         [f.mime_type for f in files],
         [f.original_filename for f in files],
     )
+    decision_dict = decision.to_dict()
+
+    # Automatic is the default. A person may instead pin a specific local model.
+    if body.model:
+        chosen = registry.get_model(body.model)
+        if chosen is None:
+            raise HTTPException(status_code=422, detail=f"Unknown model: {body.model}")
+        signals = list(decision_dict.get("matched_signals", [])) + ["manual: model chosen by user"]
+        decision_dict.update(
+            model_id=chosen.id, modelId=chosen.id, manual=True,
+            matched_signals=signals, matchedSignals=signals,
+        )
 
     run = Run(
         goal=body.goal,
-        task_class=decision.task_class,
-        model_id=decision.model_id,
-        router_decision=decision.to_dict(),
-        file_ids=body.file_ids,
+        task_class=decision_dict["task_class"],
+        model_id=decision_dict["model_id"],
+        router_decision=decision_dict,
+        file_ids=file_ids,
+        workspace=workspace,
+        parent_run_id=body.parent_run_id,
         status=RunStatus.queued,
     )
     db.add(run)
@@ -124,6 +177,9 @@ async def create_run(
             "run_id": run.id,
             "goal": run.goal,
             "file_ids": run.file_ids or [],
+            "workspace": run.workspace,
+            "context": context,
+            "model_override": body.model,
         }))
     finally:
         await redis.aclose()

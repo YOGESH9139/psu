@@ -20,6 +20,7 @@ RUN_QUEUE = "run_jobs"
 
 class IngestRequest(BaseModel):
     file_id: str
+    workspace: str | None = None
 
 
 @router.post("/ingest")
@@ -36,6 +37,7 @@ async def ingest(body: IngestRequest, db: AsyncSession = Depends(get_db)) -> dic
             "file_path": f.local_path,
             "mime_type": f.mime_type,
             "original_filename": f.original_filename,
+            "workspace": body.workspace,
         }))
     finally:
         await redis.aclose()
@@ -44,7 +46,8 @@ async def ingest(body: IngestRequest, db: AsyncSession = Depends(get_db)) -> dic
 
 
 @router.get("/sources")
-async def list_sources(db: AsyncSession = Depends(get_db)) -> list[dict]:
+async def list_sources(workspace: str | None = None,
+                       db: AsyncSession = Depends(get_db)) -> list[dict]:
     """Which documents are currently in the local knowledge base, and how many chunks."""
     result = await db.execute(
         select(
@@ -52,7 +55,8 @@ async def list_sources(db: AsyncSession = Depends(get_db)) -> list[dict]:
             KnowledgeChunk.source_hash,
             func.count(KnowledgeChunk.id).label("chunk_count"),
             func.max(KnowledgeChunk.created_at).label("ingested_at"),
-        ).group_by(KnowledgeChunk.source_file, KnowledgeChunk.source_hash)
+        ).where(KnowledgeChunk.workspace == workspace)
+        .group_by(KnowledgeChunk.source_file, KnowledgeChunk.source_hash)
     )
     return [
         {

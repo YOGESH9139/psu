@@ -205,7 +205,7 @@ def inspect_image(image_path: str, run_id: str, prompt: str = "") -> Dict[str, A
     encoded, sent_size = _encode_for_vision(img_path)
 
     try:
-        with httpx.Client(timeout=300.0) as client:
+        with registry.gpu(), httpx.Client(timeout=300.0) as client:
             resp = client.post(
                 f"{settings.ollama_url}/api/generate",
                 json={

@@ -89,6 +89,9 @@ async def process_run_job(job: dict) -> None:
         "run_id": run_id,
         "goal": job.get("goal", ""),
         "file_ids": job.get("file_ids", []),
+        "workspace": job.get("workspace"),
+        "context": job.get("context", ""),
+        "model_override": job.get("model_override"),
     }
     try:
         await asyncio.to_thread(
@@ -110,7 +113,8 @@ async def process_ingest_job(job: dict) -> None:
     logger.info("Ingesting %s (%s)", name, file_id)
 
     result = await asyncio.to_thread(
-        rag_pipeline.ingest_file, file_path, name, job.get("mime_type")
+        rag_pipeline.ingest_file, file_path, name, job.get("mime_type"),
+        job.get("workspace"),
     )
     if result.get("status") == "success":
         logger.info("Ingested %s: %d chunks over %d pages",

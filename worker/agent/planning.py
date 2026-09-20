@@ -118,7 +118,7 @@ def build_plan(state: AgentState) -> List[Dict[str, Any]]:
         return _spreadsheet_plan(run_id, primary)
     if task_class == "coding":
         return _coding_plan(run_id)
-    return _general_plan(run_id)
+    return _general_plan(run_id, primary)
 
 
 def _multimodal_plan(run_id: str, primary: Dict[str, Any] | None) -> List[Dict[str, Any]]:
@@ -167,8 +167,15 @@ def _coding_plan(run_id: str) -> List[Dict[str, Any]]:
     ]
 
 
-def _general_plan(run_id: str) -> List[Dict[str, Any]]:
-    return [{"tool": "search_knowledge", "args": {}}]
+def _general_plan(run_id: str, primary: Dict[str, Any] | None = None) -> List[Dict[str, Any]]:
+    """A conversational turn. With a spreadsheet attached, look at it, so a
+    follow-up like "and above 80?" is answered from the data, not from memory."""
+    steps: List[Dict[str, Any]] = []
+    path = (primary or {}).get("workspace_path", "")
+    if path.lower().endswith((".xlsx", ".xls", ".csv")):
+        steps.append({"tool": "analyze_spreadsheet", "args": {"file_path": path, "run_id": run_id}})
+    steps.append({"tool": "search_knowledge", "args": {}})
+    return steps
 
 
 def expand_plan(state: AgentState, tool_name: str, result: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -209,6 +216,7 @@ def resolve_args(state: AgentState, step: Dict[str, Any]) -> Dict[str, Any]:
     if tool_name == "search_knowledge":
         args.setdefault("query", _sop_query(state, model_id))
         args.setdefault("top_k", 5)
+        args["workspace"] = state.get("workspace")
 
     elif tool_name == "analyze_spreadsheet":
         args.setdefault("query", state.get("goal", ""))
@@ -423,6 +431,18 @@ def answer_general_question(state: AgentState) -> str:
         for c in citations
     ) or "(no local knowledge-base material matched this question)"
 
+    # Data the tools actually read this turn, and what earlier turns produced.
+    data_note = ""
+    for result in observations_for(state, "analyze_spreadsheet"):
+        rows = result.get("matched_rows") or []
+        data_note += (
+            f"\nSpreadsheet analysis ({result.get('interpretation', '')}): "
+            f"{result.get('match_count', 0)} matching rows: "
+            + "; ".join(", ".join(f"{k}={v}" for k, v in r.items()) for r in rows[:15])
+            + f"\nColumn statistics: {json.dumps(result.get('column_statistics', {}), default=str)[:1500]}"
+        )
+    earlier = state.get("context") or ""
+
     try:
         return chat(
             state.get("model_id", "qwen3-8b"),
@@ -431,7 +451,12 @@ def answer_general_question(state: AgentState) -> str:
                 "context provided. Cite the source file and page when you use it. "
                 "If the context does not answer the question, say so plainly."
             ),
-            user=f"Question: {state.get('goal', '')}\n\nLocal context:\n{context}",
+            user=(
+                (f"Earlier in this conversation:\n{earlier}\n\n" if earlier else "")
+                + f"Question: {state.get('goal', '')}\n"
+                + (f"\nData from the attached file:{data_note}\n" if data_note else "")
+                + f"\nLocal context:\n{context}"
+            ),
             num_predict=800,
             timeout=300.0,
         )

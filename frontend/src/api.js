@@ -1,6 +1,5 @@
-// All requests go to the local API — same origin behind nginx in the container,
-// or 127.0.0.1:8000 when running `npm run dev` against a running stack.
-const BASE = import.meta.env.DEV ? "" : "";
+// All requests go to the local API — same origin behind nginx.
+const BASE = "";
 
 async function request(path, options = {}) {
   const response = await fetch(`${BASE}${path}`, options);
@@ -32,16 +31,31 @@ export const api = {
     return request("/api/files", { method: "POST", body: form });
   },
 
-  createRun(goal, fileIds) {
-    return request("/api/runs", json({ goal, file_ids: fileIds }));
+  createRun(goal, fileIds, { workspace, parentRunId, model } = {}) {
+    return request("/api/runs", json({
+      goal,
+      file_ids: fileIds,
+      workspace: workspace || null,
+      parent_run_id: parentRunId || null,
+      model: model && model !== "auto" ? model : null,
+    }));
   },
 
-  ingest(fileId) {
-    return request("/api/knowledge/ingest", json({ file_id: fileId }));
+  ingest(fileId, workspace) {
+    return request("/api/knowledge/ingest", json({ file_id: fileId, workspace: workspace || null }));
   },
 
-  knowledgeSources() {
-    return request("/api/knowledge/sources");
+  knowledgeSources(workspace) {
+    const q = workspace ? `?workspace=${encodeURIComponent(workspace)}` : "";
+    return request(`/api/knowledge/sources${q}`);
+  },
+
+  workspaces() {
+    return request("/api/workspaces");
+  },
+
+  createWorkspace(name, template, banner) {
+    return request("/api/workspaces", json({ name, template, banner }));
   },
 
   artifacts(runId) {
@@ -64,6 +78,14 @@ export const api = {
     return `${BASE}${path}`;
   },
 };
+
+/** Fetch a bundled sample file (served by nginx from /samples) as a File. */
+export async function fetchSample(filename) {
+  const response = await fetch(`/samples/${filename}`);
+  if (!response.ok) throw new Error(`Sample ${filename} is not available`);
+  const blob = await response.blob();
+  return new File([blob], filename, { type: blob.type || "application/octet-stream" });
+}
 
 export function formatBytes(bytes) {
   if (!Number.isFinite(bytes)) return "—";

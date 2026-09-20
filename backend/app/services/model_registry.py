@@ -71,7 +71,8 @@ class ModelRegistry:
         self._router_rules: list[dict] = []
         self._loaded = False
         self._active_model: str | None = None
-        self._lock = threading.Lock()
+        # Re-entrant: the same thread may hold it across swap_model and a chat call.
+        self._lock = threading.RLock()
 
     # ── Loading ──────────────────────────────────────────────────────────────
 
@@ -101,6 +102,10 @@ class ModelRegistry:
     def router_rules(self) -> list[dict]:
         self.ensure_loaded()
         return self._router_rules
+
+    def gpu(self):
+        """Context manager: only one model call touches the GPU at a time."""
+        return self._lock
 
     @property
     def active_model(self) -> str | None:

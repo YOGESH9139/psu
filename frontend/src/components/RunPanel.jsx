@@ -135,7 +135,7 @@ export default function RunPanel({ run, onClose }) {
 
       {router && (
         <section className="rp-route">
-          <div className="rp-label">Routed automatically</div>
+          <div className="rp-label">{router.manual ? "Model chosen by you" : "Routed automatically"}</div>
           <div className="rp-route-main">
             <span className="rp-task">{TASK_LABEL[router.task_class] || router.task_class}</span>
             <span className={`pill ${router.fallback ? "warn" : "accent"}`}>{percent}%</span>

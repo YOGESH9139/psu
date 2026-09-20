@@ -19,6 +19,10 @@ class AgentState(TypedDict, total=False):
     goal: str
     file_ids: List[str]
     input_files: List[InputFile]
+    workspace: Optional[str]
+    context: str            # earlier turns of this thread, for follow-ups
+    answer_text: Optional[str]
+    model_override: Optional[str]   # None = Automatic
 
     # ── routing ──────────────────────────────────────────────────────────────
     task_class: str

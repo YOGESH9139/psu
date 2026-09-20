@@ -1,5 +1,4 @@
-﻿# PHASE 0 — Pre-Demo Sanity Pass
-
+﻿
 **Purpose:** Prove the environment works before writing a single feature line.  
 **Rule:** Fix infra until every checkbox passes. No feature code yet.  
 **Stack decisions locked in:**

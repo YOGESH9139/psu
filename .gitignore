@@ -1,0 +1,40 @@
+# ── Secrets and local config ─────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+
+# ── Python ───────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+*.egg-info/
+
+# ── Frontend ─────────────────────────────────────────────────────────────────
+node_modules/
+frontend/dist/
+*.tsbuildinfo
+
+# ── Runtime data (Docker named volumes hold the real data) ───────────────────
+volumes/
+data/
+*.log
+
+# ── Model weights are pulled into a Docker volume, never committed ───────────
+*.gguf
+*.safetensors
+
+# ── Editors and OS ───────────────────────────────────────────────────────────
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── Office lock files (created while a spreadsheet is open in Excel) ────────
+~$*
+
+# ── Scratch ──────────────────────────────────────────────────────────────────
+tmp/
+scratch/

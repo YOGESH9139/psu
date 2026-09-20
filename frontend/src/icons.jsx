@@ -92,3 +92,10 @@ export const toolIcon = (tool) =>
     list_run_artifacts: FileText,
     request_human_approval: Lock,
   }[tool] || Sparkle);
+
+export const Code = make(<><path d="M16 18l6-6-6-6" /><path d="M8 6l-6 6 6 6" /></>);
+export const ChevronDown = make(<path d="M6 9l6 6 6-6" />);
+export const Layers = make(
+  <><path d="M12 2l10 5-10 5L2 7l10-5z" /><path d="M2 17l10 5 10-5" /><path d="M2 12l10 5 10-5" /></>
+);
+export const Book2 = Book;

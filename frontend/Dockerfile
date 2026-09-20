@@ -7,6 +7,7 @@ RUN npm install --no-audit --no-fund
 
 COPY vite.config.js index.html ./
 COPY src ./src
+COPY public ./public
 RUN npm run build
 
 # ── Runtime: static files on nginx. No Node, no network calls. ───────────────

@@ -1,0 +1,172 @@
+/* Brand layer: white canvas, electric violet, restrained neon.
+   Loaded last, so it re-themes everything through the same tokens. */
+
+:root {
+  --bg: #FFFFFF;
+  --bg-raised: #FAF8FF;
+  --surface: #F4F0FF;
+  --surface-2: #EFEAFF;
+  --surface-hi: #E9E2FF;
+
+  --line: rgba(38, 20, 110, 0.09);
+  --line-hi: rgba(38, 20, 110, 0.18);
+
+  --text: #150F3A;
+  --text-dim: rgba(21, 15, 58, 0.7);
+  --text-faint: rgba(21, 15, 58, 0.46);
+
+  --accent: #6C2BFF;
+  --accent-hi: #8547FF;
+  --accent-dim: rgba(108, 43, 255, 0.1);
+  --neon: 0 0 0 1px rgba(108, 43, 255, 0.9), 0 6px 20px -3px rgba(108, 43, 255, 0.55);
+
+  --ok: #0E9F60;
+  --warn: #B86E00;
+  --bad: #DC3545;
+  --violet: #6C2BFF;
+
+  --radius: 14px;
+  --radius-sm: 10px;
+
+  --display: "Sora Variable", "Sora", "Segoe UI", system-ui, sans-serif;
+  --font: "Plus Jakarta Sans Variable", "Plus Jakarta Sans", "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+
+body { background: var(--bg); color: var(--text); font-family: var(--font); }
+h1, h2, h3, .brand-name, .hc-label, .stat-v, .rp-h, .gcard-title, .vt-name { font-family: var(--display); }
+h1 { letter-spacing: -0.03em; }
+
+:focus-visible { outline: 2px solid #A56BFF; outline-offset: 2px; }
+::-webkit-scrollbar-thumb { background: #DCD3FF; }
+::-webkit-scrollbar-thumb:hover { background: #C4B5FF; }
+
+/* ─── Logo + wordmark ────────────────────────────────────────────────────── */
+.logo { display: block; flex: none; filter: drop-shadow(0 4px 10px rgba(108, 43, 255, 0.45)); }
+.brand { gap: 11px; }
+.brand-name { font-size: 15px; font-weight: 700; letter-spacing: -0.02em; }
+.brand-name b { font-weight: 700; color: var(--text); }
+.brand-name span { font-weight: 500; color: var(--accent); }
+.brand-sub { font-size: 11px; }
+
+/* ─── Canvas ─────────────────────────────────────────────────────────────── */
+.sidebar { background: var(--bg-raised); border-right: 1px solid var(--line); }
+.topbar { border-bottom: 1px solid var(--line); background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(8px); }
+.main {
+  background-color: var(--bg);
+  background-image: radial-gradient(rgba(108, 43, 255, 0.13) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+.topbar, .composer-wrap { position: relative; z-index: 2; }
+.composer-wrap { background: linear-gradient(to top, #fff 55%, rgba(255, 255, 255, 0)); }
+.run-panel, .drawer { background: var(--bg-raised); }
+
+/* ─── Surfaces ───────────────────────────────────────────────────────────── */
+.card, .gcard, .setup-template, .hero-card, .wsw-btn, .thinking, .stat, .kb-item, .status-row:hover {
+  background: #fff;
+}
+.card, .thinking {
+  box-shadow: inset 0 0 0 1px var(--line), 0 1px 2px rgba(60, 30, 160, 0.05), 0 12px 28px -16px rgba(60, 30, 160, 0.25);
+}
+.kb-item, .stat { background: var(--surface); }
+.card-head { border-bottom-color: var(--line); }
+.artifact, .step-expand { background: var(--bg-raised); }
+.signal { background: var(--surface); color: var(--text-dim); }
+.data-table th { background: var(--surface); }
+.table-scroll { background: #fff; }
+
+.hero-card, .setup-template, .gcard { box-shadow: inset 0 0 0 1px var(--line), 0 10px 24px -18px rgba(60, 30, 160, 0.4); }
+.hero-card:hover, .gcard:hover, .gcard:focus-within, .setup-template:hover {
+  box-shadow: inset 0 0 0 1.5px var(--accent), 0 14px 30px -14px rgba(108, 43, 255, 0.45);
+}
+.setup-template.is-picked { background: var(--accent-dim); box-shadow: inset 0 0 0 1.5px var(--accent), 0 14px 30px -14px rgba(108, 43, 255, 0.5); }
+.gcard.is-roadmap { background: transparent; box-shadow: inset 0 0 0 1px var(--line-hi); }
+
+/* ─── Neon primary actions ───────────────────────────────────────────────── */
+.send-btn, .dl-btn, .gpop-try, .btn-primary {
+  background: var(--accent); color: #fff; box-shadow: var(--neon);
+  transition: background 120ms ease, box-shadow 120ms ease, transform 120ms ease;
+}
+.send-btn:hover:not(:disabled), .dl-btn:hover, .gpop-try:hover, .btn-primary:not(:disabled):hover {
+  background: var(--accent-hi); filter: none;
+  box-shadow: 0 0 0 1px #A56BFF, 0 8px 26px -2px rgba(133, 71, 255, 0.7);
+}
+.send-btn:disabled { box-shadow: none; background: #CFC3FF; opacity: 1; }
+.side-btn.is-primary {
+  background: var(--accent); color: #fff; box-shadow: var(--neon); font-weight: 600;
+}
+.side-btn.is-primary:hover:not(:disabled) { background: var(--accent-hi); color: #fff; }
+.side-btn.is-primary svg { opacity: 1; }
+.btn-approve { background: var(--ok); color: #fff; box-shadow: 0 0 0 1px rgba(14, 159, 96, 0.9), 0 6px 18px -4px rgba(14, 159, 96, 0.5); }
+.btn-reject { color: var(--bad); box-shadow: inset 0 0 0 1px rgba(220, 53, 69, 0.5); }
+.ghost-btn { background: #fff; color: var(--text-dim); }
+.ghost-btn:hover { background: var(--surface); color: var(--text); }
+.ghost-btn.is-on { color: var(--accent); background: var(--accent-dim); box-shadow: inset 0 0 0 1px var(--accent); }
+.read-draft { color: var(--accent); background: var(--accent-dim); }
+
+/* ─── Tabs, chips, banner ────────────────────────────────────────────────── */
+.viewtabs { background: var(--surface); }
+.viewtabs button.is-on {
+  background: var(--accent); color: #fff; box-shadow: var(--neon);
+}
+.banner-chip { color: var(--accent); background: var(--accent-dim); box-shadow: inset 0 0 0 1px rgba(108, 43, 255, 0.4); }
+.pill { background: var(--surface-hi); color: var(--text-dim); }
+.pill.ok { background: rgba(14, 159, 96, 0.12); }
+.pill.warn { background: rgba(184, 110, 0, 0.12); }
+.pill.bad { background: rgba(220, 53, 69, 0.12); }
+.pill.accent { background: var(--accent-dim); color: var(--accent); }
+.gchip.ok { background: rgba(14, 159, 96, 0.12); }
+.gchip.road { background: rgba(184, 110, 0, 0.12); color: var(--warn); }
+
+/* ─── Conversation ───────────────────────────────────────────────────────── */
+.bubble {
+  background: var(--accent); color: #fff; border-radius: 16px 16px 4px 16px;
+  box-shadow: 0 10px 26px -10px rgba(108, 43, 255, 0.6);
+}
+.bubble .attachment { background: rgba(255, 255, 255, 0.18); color: rgba(255, 255, 255, 0.92); }
+.agent-avatar { background: linear-gradient(145deg, #9A5CFF, #5417E0); box-shadow: 0 4px 12px -2px rgba(108, 43, 255, 0.55); }
+.agent-avatar svg { color: #fff; }
+.hero-mark, .brand-mark {
+  background: linear-gradient(145deg, #9A5CFF, #5417E0);
+  box-shadow: 0 10px 30px -6px rgba(108, 43, 255, 0.6), inset 0 0 0 1px rgba(255, 255, 255, 0.25);
+}
+.hero-mark svg, .brand-mark svg { color: #fff; }
+.hero h1 { font-size: 30px; }
+
+.composer { background: #fff; box-shadow: inset 0 0 0 1px var(--line-hi), 0 18px 40px -20px rgba(60, 30, 160, 0.4); }
+.composer:focus-within {
+  box-shadow: inset 0 0 0 1.5px var(--accent), 0 0 0 4px rgba(108, 43, 255, 0.14), 0 18px 40px -18px rgba(108, 43, 255, 0.5);
+}
+.composer.is-drop { box-shadow: inset 0 0 0 2px var(--accent), 0 0 0 5px rgba(108, 43, 255, 0.18); }
+.model-pick { background: var(--surface); }
+.file-chip { background: var(--surface); }
+
+/* ─── Timeline + state ───────────────────────────────────────────────────── */
+.step-icon.done { background: rgba(14, 159, 96, 0.14); color: var(--ok); }
+.step-icon.fail { background: rgba(220, 53, 69, 0.14); color: var(--bad); }
+.step-icon.active { background: var(--accent-dim); color: var(--accent); }
+.spinner { border-color: rgba(108, 43, 255, 0.18); border-top-color: var(--accent); }
+.run-beacon.is-live { background: var(--accent); }
+.confidence-fill { background: linear-gradient(90deg, #8547FF, #C05CFF); }
+.step-console, .doc-code { background: #1B1445; color: #DCD4FF; }
+.step-isolation { color: var(--ok); }
+.dot.ok { background: var(--ok); }
+.filter-strip { background: var(--accent-dim); }
+.filter-strip code { background: #fff; color: var(--accent); }
+.data-table td.is-filtered { background: var(--accent-dim); }
+.finding-bar.low, .finding-bar.info { background: var(--accent); }
+
+/* ─── Dialogs + viewer ───────────────────────────────────────────────────── */
+.backdrop { background: rgba(28, 16, 74, 0.42); }
+.dialog, .viewer, .setup-card { background: #fff; box-shadow: inset 0 0 0 1px var(--line-hi), 0 30px 80px -20px rgba(40, 16, 130, 0.45); }
+.dialog-summary, .fact { background: var(--surface); }
+.viewer-body { background: #EEE9FF; }
+.doc-page { background: #fff; box-shadow: 0 14px 40px -14px rgba(40, 16, 130, 0.35); }
+.risk-notice { background: rgba(184, 110, 0, 0.08); }
+.wsw-menu { background: #fff; box-shadow: inset 0 0 0 1px var(--line-hi), 0 18px 40px -12px rgba(40, 16, 130, 0.35); }
+.gpop { background: #fff; box-shadow: inset 0 0 0 1.5px var(--accent), 0 20px 44px -12px rgba(40, 16, 130, 0.45); }
+.gpop-tick { background: rgba(14, 159, 96, 0.14); }
+
+.setup { background: radial-gradient(circle at 50% 0, rgba(108, 43, 255, 0.08), transparent 55%), var(--bg-raised); }
+.setup-fields input[type="text"], .setup-fields select, .dialog-note input { background: #fff; }
+.boot { background: var(--bg); }

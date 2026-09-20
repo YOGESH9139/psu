@@ -4,12 +4,19 @@ import { FileText, Paperclip, Send, X } from "../icons";
 
 const ACCEPT = ".pdf,.png,.jpg,.jpeg,.tif,.tiff,.xlsx,.xls,.csv,.py,.txt,.docx";
 
-export default function Composer({ onSubmit, busy, draft, onDraftChange }) {
+export default function Composer({
+  onSubmit, busy, draft, onDraftChange, preset, placeholder, models = [], model = "auto", onModelChange,
+}) {
   const goal = draft;
   const setGoal = onDraftChange;
   const [file, setFile] = useState(null);
   const [dropping, setDropping] = useState(false);
   const textareaRef = useRef(null);
+
+  // A starter task or a Guide example can attach its sample file for you.
+  useEffect(() => {
+    if (preset) setFile(preset.file || null);
+  }, [preset?.key]); // eslint-disable-line react-hooks/exhaustive-deps
   const fileRef = useRef(null);
 
   // Grow with the content, up to the CSS max-height.
@@ -73,7 +80,7 @@ export default function Composer({ onSubmit, busy, draft, onDraftChange }) {
           ref={textareaRef}
           rows={1}
           value={goal}
-          placeholder="Ask about a report, a spreadsheet, or some code…"
+          placeholder={placeholder || "Ask about a report, a spreadsheet, or some code…"}
           onChange={(e) => setGoal(e.target.value)}
           onKeyDown={onKeyDown}
           disabled={busy}
@@ -110,6 +117,21 @@ export default function Composer({ onSubmit, busy, draft, onDraftChange }) {
               </button>
             </span>
           )}
+
+          <label className="model-pick" title="Automatic lets the router choose the best local model for the task">
+            <span className="model-pick-k">Model</span>
+            <select
+              id="model-select"
+              value={model}
+              onChange={(e) => onModelChange?.(e.target.value)}
+              disabled={busy}
+            >
+              <option value="auto">Automatic</option>
+              {models.map((m) => (
+                <option key={m.id} value={m.id}>{m.ollama_model}</option>
+              ))}
+            </select>
+          </label>
 
           <button
             type="button"

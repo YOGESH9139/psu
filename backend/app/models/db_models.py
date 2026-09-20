@@ -51,6 +51,9 @@ class Run(Base):
     model_id: Mapped[str | None] = mapped_column(String(64))
     router_decision: Mapped[dict | None] = mapped_column(JSON)
     file_ids: Mapped[list | None] = mapped_column(JSON)
+    workspace: Mapped[str | None] = mapped_column(String(36))
+    parent_run_id: Mapped[str | None] = mapped_column(String(36))
+    result: Mapped[dict | None] = mapped_column(JSON)
     iteration_count: Mapped[int] = mapped_column(Integer, default=0)
     error_message: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(
@@ -144,6 +147,7 @@ class KnowledgeChunk(Base):
     heading: Mapped[str | None] = mapped_column(String(512))
     text: Mapped[str] = mapped_column(Text)
     qdrant_point_id: Mapped[str] = mapped_column(String(36))
+    workspace: Mapped[str | None] = mapped_column(String(36), index=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -160,6 +164,21 @@ class UploadedFile(Base):
     size_bytes: Mapped[int] = mapped_column(Integer)
     sha256: Mapped[str] = mapped_column(String(64))
     local_path: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+# ─── Workspace ───────────────────────────────────────────────────────────────
+
+class Workspace(Base):
+    """A named area with its own reference library and starter tasks."""
+    __tablename__ = "workspaces"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    name: Mapped[str] = mapped_column(String(128))
+    template: Mapped[str] = mapped_column(String(64), default="blank")
+    banner: Mapped[str] = mapped_column(String(32), default="INTERNAL")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

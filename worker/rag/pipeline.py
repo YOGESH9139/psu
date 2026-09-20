@@ -148,7 +148,8 @@ class LocalRAGPipeline:
     # ── ingestion ────────────────────────────────────────────────────────────
 
     def ingest_file(self, file_path: str, source_name: str | None = None,
-                    mime_type: str | None = None) -> Dict[str, Any]:
+                    mime_type: str | None = None,
+                    workspace: str | None = None) -> Dict[str, Any]:
         """Extract -> chunk -> embed -> Qdrant + Postgres. Re-ingesting a file
         with the same content hash replaces its previous chunks."""
         path = Path(file_path)
@@ -192,6 +193,7 @@ class LocalRAGPipeline:
                     "page_number": chunk["page_number"],
                     "heading": chunk["heading"],
                     "text": chunk["text"],
+                    "workspace": workspace,
                 },
             ))
             rows.append(KnowledgeChunk(
@@ -201,6 +203,7 @@ class LocalRAGPipeline:
                 heading=chunk["heading"],
                 text=chunk["text"],
                 qdrant_point_id=point_id,
+                workspace=workspace,
             ))
 
         if self.qdrant is None:
@@ -212,9 +215,12 @@ class LocalRAGPipeline:
             superseded = list(session.execute(
                 select(KnowledgeChunk.qdrant_point_id)
                 .where(KnowledgeChunk.source_file == source_file)
+                .where(KnowledgeChunk.workspace == workspace)
             ).scalars().all())
             session.execute(
-                delete(KnowledgeChunk).where(KnowledgeChunk.source_file == source_file)
+                delete(KnowledgeChunk)
+                .where(KnowledgeChunk.source_file == source_file)
+                .where(KnowledgeChunk.workspace == workspace)
             )
             session.add_all(rows)
             session.commit()
@@ -245,18 +251,21 @@ class LocalRAGPipeline:
 
     # ── retrieval ────────────────────────────────────────────────────────────
 
-    def _refresh_bm25(self) -> Dict[str, KnowledgeChunk]:
+    def _refresh_bm25(self, workspace: str | None = None) -> Dict[str, KnowledgeChunk]:
+        """Rows for ONE workspace. The corpus is small, so the lexical index is
+        rebuilt per search, which keeps workspaces strictly separate."""
         with self._session_factory() as session:
-            rows = list(session.execute(select(KnowledgeChunk)).scalars().all())
+            rows = list(session.execute(
+                select(KnowledgeChunk).where(KnowledgeChunk.workspace == workspace)
+            ).scalars().all())
             session.expunge_all()
-        if self._bm25_dirty:
-            self._bm25.build([(r.qdrant_point_id, f"{r.heading or ''} {r.text}") for r in rows])
-            self._bm25_dirty = False
+        self._bm25.build([(r.qdrant_point_id, f"{r.heading or ''} {r.text}") for r in rows])
         return {r.qdrant_point_id: r for r in rows}
 
-    def search(self, query: str, top_k: int = FINAL_TOP_K) -> List[Dict[str, Any]]:
+    def search(self, query: str, top_k: int = FINAL_TOP_K,
+               workspace: str | None = None) -> List[Dict[str, Any]]:
         """Hybrid dense + BM25 retrieval fused with RRF, trimmed to top_k."""
-        by_id = self._refresh_bm25()
+        by_id = self._refresh_bm25(workspace)
         if not by_id:
             return []
 
@@ -269,17 +278,8 @@ class LocalRAGPipeline:
                     limit=HYBRID_CANDIDATES,
                     with_payload=True,
                 ).points
-                dense_ranked = [str(h.id) for h in hits]
-                for h in hits:  # payload is the fallback if Postgres lost a row
-                    if str(h.id) not in by_id and h.payload:
-                        by_id[str(h.id)] = KnowledgeChunk(
-                            qdrant_point_id=str(h.id),
-                            source_file=h.payload.get("source_file", "unknown"),
-                            source_hash=h.payload.get("source_hash", ""),
-                            page_number=h.payload.get("page_number"),
-                            heading=h.payload.get("heading"),
-                            text=h.payload.get("text", ""),
-                        )
+                # Only chunks that belong to this workspace may be cited.
+                dense_ranked = [str(h.id) for h in hits if str(h.id) in by_id]
             except Exception as e:
                 logger.warning("Dense retrieval failed, falling back to BM25 only: %s", e)
 

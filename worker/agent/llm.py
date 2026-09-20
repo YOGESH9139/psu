@@ -79,7 +79,7 @@ def chat(
         payload["format"] = "json"
 
     try:
-        with httpx.Client(timeout=timeout) as client:
+        with registry.gpu(), httpx.Client(timeout=timeout) as client:
             resp = client.post(f"{settings.ollama_url}/api/chat", json=payload)
             if resp.status_code == 400 and "think" in resp.text.lower():
                 # Model does not support the thinking toggle (e.g. the VL model).

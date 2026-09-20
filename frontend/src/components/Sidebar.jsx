@@ -1,6 +1,7 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
-import { Book, Cpu, Lock, Plus, Shield } from "../icons";
+import { Book, ChevronDown, Layers, Lock, Plus } from "../icons";
+import Logo from "./Logo";
 
 function StatusRow({ level, label, title }) {
   return (
@@ -20,7 +21,69 @@ function Stat({ value, label }) {
   );
 }
 
-export default function Sidebar({ status, sources, session, onNewRun, onIngested, busy }) {
+function WorkspaceSwitcher({ workspaces, current, onSwitch, onNew }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const close = (event) => {
+      if (ref.current && !ref.current.contains(event.target)) setOpen(false);
+    };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [open]);
+
+  return (
+    <div className="wsw" ref={ref}>
+      <button type="button" className="wsw-btn" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
+        <span className="hc-icon">
+          <Layers />
+        </span>
+        <span className="wsw-text">
+          <span className="wsw-k">Workspace</span>
+          <span className="wsw-v">{current?.name}</span>
+        </span>
+        <ChevronDown className="wsw-chev" />
+      </button>
+
+      {open && (
+        <div className="wsw-menu" role="menu">
+          {workspaces.map((w) => (
+            <button
+              key={w.id}
+              type="button"
+              role="menuitem"
+              className={`wsw-item${w.id === current?.id ? " is-current" : ""}`}
+              onClick={() => {
+                setOpen(false);
+                onSwitch(w.id);
+              }}
+            >
+              <span>{w.name}</span>
+              <span className="wsw-tag">{w.banner}</span>
+            </button>
+          ))}
+          <button
+            type="button"
+            role="menuitem"
+            className="wsw-item wsw-new"
+            onClick={() => {
+              setOpen(false);
+              onNew();
+            }}
+          >
+            <Plus style={{ width: 13, height: 13 }} /> New workspace
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function Sidebar({
+  status, sources, session, workspaces, current, onSwitch, onNewWorkspace, onNewRun, onIngested, busy,
+}) {
   const fileRef = useRef(null);
   const [ingesting, setIngesting] = useState(false);
   const [message, setMessage] = useState("");
@@ -34,7 +97,7 @@ export default function Sidebar({ status, sources, session, onNewRun, onIngested
     setMessage(`Indexing ${file.name}…`);
     try {
       const uploaded = await api.uploadFile(file);
-      await api.ingest(uploaded.file_id);
+      await api.ingest(uploaded.file_id, current?.id);
       // Ingestion is asynchronous; poll a few times for the chunk count.
       [1500, 4000, 9000, 16000].forEach((delay) => setTimeout(onIngested, delay));
       setMessage("Reading and indexing locally…");
@@ -58,12 +121,14 @@ export default function Sidebar({ status, sources, session, onNewRun, onIngested
   return (
     <aside className="sidebar">
       <div className="brand">
-        <div className="brand-mark"><Shield /></div>
+        <Logo size={32} />
         <div>
-          <div className="brand-name">Sovereign Workbench</div>
+          <div className="brand-name"><b>Sovereign</b> <span>Workbench</span></div>
           <div className="brand-sub">Runs entirely on this machine</div>
         </div>
       </div>
+
+      <WorkspaceSwitcher workspaces={workspaces} current={current} onSwitch={onSwitch} onNew={onNewWorkspace} />
 
       <button type="button" className="side-btn is-primary" onClick={onNewRun} disabled={busy}>
         <Plus />
@@ -80,15 +145,10 @@ export default function Sidebar({ status, sources, session, onNewRun, onIngested
       </div>
 
       <div className="side-section">
-        <div className="side-label">Reference library</div>
-        <button
-          type="button"
-          className="side-btn"
-          onClick={() => fileRef.current?.click()}
-          disabled={ingesting}
-        >
+        <div className="side-label">Library · {current?.name}</div>
+        <button type="button" className="side-btn" onClick={() => fileRef.current?.click()} disabled={ingesting}>
           <Book />
-          {ingesting ? "Uploading…" : "Add a policy document"}
+          {ingesting ? "Uploading…" : "Add a document"}
         </button>
         <input
           ref={fileRef}
@@ -100,9 +160,7 @@ export default function Sidebar({ status, sources, session, onNewRun, onIngested
 
         <div className="kb-list">
           {sources.length === 0 && !message && (
-            <div className="kb-empty">
-              Nothing indexed yet. The agent can only cite documents you add here.
-            </div>
+            <div className="kb-empty">Nothing indexed here yet. The agent only cites this workspace's documents.</div>
           )}
           {message && <div className="kb-empty">{message}</div>}
           {sources.map((source) => (
@@ -121,8 +179,10 @@ export default function Sidebar({ status, sources, session, onNewRun, onIngested
           <StatusRow
             level={level(egress.worker)}
             label={
-              level(egress.worker) === "ok" ? "No internet access"
-                : level(egress.worker) === "bad" ? "Egress detected"
+              level(egress.worker) === "ok"
+                ? "No internet access"
+                : level(egress.worker) === "bad"
+                ? "Egress detected"
                 : "Checking network…"
             }
             title="Probed from inside the agent container"
@@ -137,18 +197,6 @@ export default function Sidebar({ status, sources, session, onNewRun, onIngested
             label={models.length ? `${healthy}/${models.length} models ready` : "Models loading…"}
             title={models.map((m) => m.ollama_model).join(", ")}
           />
-        </div>
-        <div className="model-chips">
-          {models.map((model) => (
-            <span
-              className={`model-chip${model.healthy ? " is-ready" : ""}`}
-              key={model.id}
-              title={`${model.ollama_model} · ${model.endpoint}`}
-            >
-              <Cpu style={{ width: 10, height: 10 }} />
-              {model.ollama_model}
-            </span>
-          ))}
         </div>
       </div>
 
